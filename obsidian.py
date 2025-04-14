@@ -31,7 +31,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-VAULT_PATH = os.getenv("OBSIDIAN_VAULT_PATH", "~/Documents/Notes")
+VAULT_PATH = os.getenv("OBSIDIAN_VAULT_PATH", "Documents/Notes")
 QUICK_CAPTURE_NOTE = os.getenv("OBSIDIAN_QUICK_CAPTURE_NOTE", "_reminder.md")
 NUMBER_OF_NOTES = int(os.getenv("OBSIDIAN_NUMBER_OF_NOTES", "8"))
 
@@ -142,7 +142,7 @@ class ObsidianPlugin:
             self.content = query[len(PREFIX_QUICK_CAPTURE) + 1:]
             logger.info(f"Quick capture mode activated with content: {self.content}")
             # Show the quick capture note as the only option
-            quick_capture_path = os.path.join(VAULT_PATH, QUICK_CAPTURE_NOTE)
+            quick_capture_path = QUICK_CAPTURE_NOTE  # Just use the note name, not the full path
             self.send_response({
                 "Append": {
                     "id": 0,
@@ -178,13 +178,12 @@ class ObsidianPlugin:
     def handle_activate(self, id):
         logger.info(f"Handling activate for id: {id}")
         if self.state == "quick-capture":
-            quick_capture_path = os.path.join(VAULT_PATH, QUICK_CAPTURE_NOTE)
             # Get current time in HH:MM:SS format
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
             # Prepend timestamp to content
             timestamped_content = f"{timestamp} {self.content}"
             logger.info(f"Appending to quick capture note: {timestamped_content}")
-            append_to_note_in_vault(VAULT_PATH, quick_capture_path, timestamped_content)
+            append_to_note_in_vault(VAULT_PATH, QUICK_CAPTURE_NOTE, timestamped_content)
             self.reset()
             self.send_response("Close")
         else:
