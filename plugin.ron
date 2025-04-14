@@ -1,0 +1,13 @@
+(
+    name: "Obsidian",
+    description: "Manage your Obsidian Vault",
+    bin: (
+        path: "obsidian.py",
+    ),
+    icon: Name("obsidian"),
+    query: (
+	isolate: true,
+        help: "oc ",
+        regex: "^(on|of|od|oc) .*",
+    )
+)

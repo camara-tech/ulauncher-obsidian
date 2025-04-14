@@ -6,9 +6,23 @@ from urllib.parse import quote, urlencode
 from pathlib import Path
 from typing import List, Literal
 import logging
-from ulauncher.utils.fuzzy_search import get_score
+from fuzzywuzzy import fuzz
 
 from .moment import convert_moment_to_strptime_format
+
+# Setup logging
+log_dir = Path.home() / ".local" / "state" / "pop-launcher-obsidian"
+log_dir.mkdir(parents=True, exist_ok=True)
+log_file = log_dir / "obsidian.log"
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
+    ]
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +32,14 @@ def fuzzyfinder(search: str, items: List[str]) -> List[str]:
     >>> fuzzyfinder("hallo", ["hi", "hu", "hallo", "false"])
     ['hallo', 'false', 'hi', 'hu']
     """
+    logger.debug(f"Fuzzy searching for '{search}' in {len(items)} items")
     scores = []
     for i in items:
-        score = get_score(search, get_name_from_path(i))
+        score = fuzz.ratio(search.lower(), get_name_from_path(i).lower())
         scores.append((score, i))
 
     scores = sorted(scores, key=lambda score: score[0], reverse=True)
-
+    logger.debug(f"Found {len(scores)} matches")
     return list(map(lambda score: score[1], scores))
 
 
@@ -219,10 +234,13 @@ def find_note_in_vault(vault: str, search: str) -> List[Note]:
     >>> find_note_in_vault("test-vault", "Test")
     [Note<test-vault/Test.md>, Note<test-vault/Test2.md>, Note<test-vault/subdir/Test.md>, Note<test-vault/subdir/Hallo.md>]
     """
+    logger.info(f"Searching for notes in {vault} with query: {search}")
     search_pattern = os.path.join(vault, "**", "*.md")
-    logger.info(search_pattern)
+    logger.debug(f"Using search pattern: {search_pattern}")
     files = glob.glob(search_pattern, recursive=True)
+    logger.debug(f"Found {len(files)} files")
     suggestions = fuzzyfinder(search, files)
+    logger.info(f"Found {len(suggestions)} matching notes")
     return [
         Note(name=get_name_from_path(s), path=s, description=s) for s in suggestions
     ]
@@ -233,29 +251,38 @@ def find_string_in_vault(vault: str, search: str) -> List[Note]:
     >>> find_string_in_vault("test-vault", "Test")
     [Note<test-vault/Test.md>, Note<test-vault/subdir/Test.md>]
     """
+    logger.info(f"Searching for string '{search}' in {vault}")
     files = glob.glob(os.path.join(vault, "**", "*.md"), recursive=True)
+    logger.debug(f"Found {len(files)} files to search")
 
     suggestions = []
-
-    CONTEXT_SIZE = 10
 
     search = search.lower()
     for file in files:
         if os.path.isfile(file) and search is not None:
-            with open(file, "r") as f:
-                for line in f:
-                    left, sep, right = line.lower().partition(search)
-                    if sep:
-                        context = left[CONTEXT_SIZE:] + sep + right[:CONTEXT_SIZE]
-                        suggestions.append(
-                            Note(
-                                name=get_name_from_path(file),
-                                path=file,
-                                description=context,
-                            )
-                        )
-                        break
+            try:
+                # Try UTF-8 first, fall back to latin-1 if that fails
+                try:
+                    with open(file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                except UnicodeDecodeError:
+                    logger.warning(f"Failed to read {file} as UTF-8, trying latin-1")
+                    with open(file, "r", encoding="latin-1") as f:
+                        content = f.read()
+                
+                # Search in the content
+                if search in content.lower():
+                    logger.debug(f"Found match in {file}")
+                    suggestions.append(Note(
+                        name=get_name_from_path(file),
+                        path=file,
+                        description=file
+                    ))
+            except Exception as e:
+                logger.warning(f"Error reading file {file}: {str(e)}")
+                continue
 
+    logger.info(f"Found {len(suggestions)} files containing '{search}'")
     return suggestions
 
 
